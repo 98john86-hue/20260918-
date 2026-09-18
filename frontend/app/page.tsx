@@ -14,6 +14,12 @@ export default function HomePage() {
         <Link href="/search" className="rounded-md border border-sky-600 px-4 py-2 text-sm font-medium text-sky-600">
           장면 검색하기
         </Link>
+        <Link
+          href="/search/video"
+          className="rounded-md border border-sky-600 px-4 py-2 text-sm font-medium text-sky-600"
+        >
+          영상 내 모션 검색
+        </Link>
       </div>
     </div>
   );

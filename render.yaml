@@ -1,0 +1,23 @@
+databases:
+  - name: swim-scene-search-db
+    plan: free
+
+services:
+  - type: web
+    name: swim-scene-search-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: swim-scene-search-db
+          property: connectionString
+      - key: DOWNLOAD_DIR
+        value: /app/downloads
+      - key: CORS_ORIGINS
+        value: '["https://moviecompiler.netlify.app"]'
+      - key: GEMINI_API_KEY
+        sync: false

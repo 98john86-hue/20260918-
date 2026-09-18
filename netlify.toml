@@ -1,0 +1,13 @@
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # Public (non-secret) backend URL, baked into the client bundle at build
+  # time. Points at the Render web service defined in render.yaml — update
+  # this if the Render service is renamed or redeployed under a new URL.
+  NEXT_PUBLIC_API_BASE_URL = "https://swim-scene-search-backend.onrender.com"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
