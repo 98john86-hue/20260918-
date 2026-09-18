@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # Gemini / multimodal LLM
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-1.5-flash"
+    gemini_model: str = "gemini-3.5-flash-lite"
     llm_max_retries: int = 4
     llm_retry_min_wait_sec: float = 2.0
     llm_retry_max_wait_sec: float = 16.0

@@ -203,14 +203,21 @@ class GeminiAnalyzer:
         return parse_match_results(raw_text)
 
 
-def get_llm_analyzer() -> LLMAnalyzer:
+def get_llm_analyzer(api_key: str | None = None) -> LLMAnalyzer:
+    """Build a Gemini-backed analyzer.
+
+    `api_key` lets a caller (e.g. a search request carrying the user's own
+    Gemini key) override the server-configured GEMINI_API_KEY for that one
+    call, so a user can search without the operator provisioning a shared key.
+    """
     settings = get_settings()
-    if not settings.gemini_api_key:
+    resolved_key = api_key or settings.gemini_api_key
+    if not resolved_key:
         raise LLMConfigurationError(
-            "GEMINI_API_KEY is not set. Configure it in .env to enable video analysis."
+            "Gemini API 키가 없습니다. 직접 입력하거나 서버에 GEMINI_API_KEY를 설정하세요."
         )
     return GeminiAnalyzer(
-        api_key=settings.gemini_api_key,
+        api_key=resolved_key,
         model_name=settings.gemini_model,
         max_retries=settings.llm_max_retries,
         min_wait=settings.llm_retry_min_wait_sec,

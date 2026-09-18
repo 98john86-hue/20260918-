@@ -4,11 +4,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.config import Settings
 from app.services.llm_analysis import (
     GeminiAnalyzer,
+    LLMConfigurationError,
     MatchResult,
     SceneSegment,
     TransientLLMError,
+    get_llm_analyzer,
     parse_match_results,
     parse_scene_segments,
 )
@@ -64,3 +67,37 @@ def test_gemini_analyzer_gives_up_after_max_retries(mock_model_cls, _mock_config
     with pytest.raises(TransientLLMError):
         analyzer.rank_segments("turn", [SceneSegment(0, 1, "desc")])
     assert mock_model.generate_content.call_count == 3
+
+
+@patch("app.services.llm_analysis.get_settings")
+def test_get_llm_analyzer_raises_when_no_key_anywhere(mock_get_settings):
+    mock_get_settings.return_value = Settings(gemini_api_key=None)
+
+    with pytest.raises(LLMConfigurationError):
+        get_llm_analyzer()
+
+
+@patch("google.generativeai.GenerativeModel")
+@patch("google.generativeai.configure")
+@patch("app.services.llm_analysis.get_settings")
+def test_get_llm_analyzer_uses_caller_supplied_key_when_server_has_none(
+    mock_get_settings, mock_configure, _mock_model_cls
+):
+    mock_get_settings.return_value = Settings(gemini_api_key=None)
+
+    get_llm_analyzer(api_key="user-supplied-key")
+
+    mock_configure.assert_called_once_with(api_key="user-supplied-key")
+
+
+@patch("google.generativeai.GenerativeModel")
+@patch("google.generativeai.configure")
+@patch("app.services.llm_analysis.get_settings")
+def test_get_llm_analyzer_prefers_caller_supplied_key_over_server_key(
+    mock_get_settings, mock_configure, _mock_model_cls
+):
+    mock_get_settings.return_value = Settings(gemini_api_key="server-key")
+
+    get_llm_analyzer(api_key="user-supplied-key")
+
+    mock_configure.assert_called_once_with(api_key="user-supplied-key")
