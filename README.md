@@ -3,25 +3,28 @@
 유튜브 링크로 등록한 여러 수영 영상 중에서, 자연어로 설명한 장면(예: "자유형 턴에서 팔을 젓는 모습")과 가장 유사한
 순간을 자동으로 찾아 타임스탬프와 함께 보여주는 웹 애플리케이션입니다.
 
-> ⚠️ **법적/윤리적 고지**: 이 프로젝트는 `yt-dlp`로 유튜브 영상을 다운로드합니다. 이는 **개인적·비상업적
-> 학습 및 기술 분석 목적**으로만 사용해야 하며, 유튜브 서비스 약관과 충돌할 수 있습니다. 다운로드한 영상
-> 파일을 재배포하거나 이 프로젝트를 공개 서비스로 전환하려는 경우, 반드시 별도의 법적 검토를 거치세요.
+> ⚠️ **법적/윤리적 고지**: 영상 자체는 서버로 다운로드하지 않습니다 — Gemini API가 공개 유튜브 URL을
+> 직접 가져와 분석합니다 (`app/services/llm_analysis.py`). `yt-dlp`는 제목/썸네일/길이 같은 메타데이터
+> 조회에만 쓰입니다. 그래도 이 프로젝트는 **개인적·비상업적 학습 및 기술 분석 목적**으로만 사용해야 하며,
+> 유튜브 서비스 약관과 충돌할 수 있습니다. 이 프로젝트를 공개 서비스로 전환하려는 경우, 반드시 별도의
+> 법적 검토를 거치세요.
 
 ## 아키텍처 개요 (Phase 1)
 
 ```
-[Next.js Frontend]  --REST-->  [FastAPI Backend]  --yt-dlp-->  YouTube
+[Next.js Frontend]  --REST-->  [FastAPI Backend]  --yt-dlp-->  YouTube (metadata only)
      |register/search view          |                              |
-     |                              +--BackgroundTasks--> download -> analyze
-     |                              |
-     |                         [PostgreSQL] <-- video metadata, status, cached scene segments
-     |                              |
-     +<---- polling / search -------+--Gemini API (multimodal)--> scene understanding
+     |                              +--BackgroundTasks--> analyze --+
+     |                              |                                \
+     |                         [PostgreSQL] <-- video metadata,       Gemini API fetches the
+     |                              |            status, cached       public YouTube URL itself
+     |                              |            scene segments       (no video bytes touch this
+     +<---- polling / search -------+--Gemini API (multimodal)-->     backend)
 ```
 
-**왜 두 단계 분석인가?** 영상을 등록할 때 딱 한 번 멀티모달 LLM(Gemini)에 전체 영상을 보내 장면별
+**왜 두 단계 분석인가?** 영상을 등록할 때 딱 한 번 멀티모달 LLM(Gemini)에 유튜브 URL을 보내 장면별
 타임스탬프+설명을 뽑아 `analysis_segments` 테이블에 캐시합니다. 검색 시에는 이 캐시된 설명 텍스트와
-사용자 쿼리만 텍스트 LLM 호출로 비교합니다. 즉, 영상은 등록 시 1회만 업로드되고, 이후 검색 횟수와
+사용자 쿼리만 텍스트 LLM 호출로 비교합니다. 즉, 영상은 등록 시 1회만 분석되고, 이후 검색 횟수와
 무관하게 LLM 비용이 늘어나지 않습니다. (Phase 2에서는 이 텍스트 매칭을 프레임 임베딩 벡터 검색으로
 대체할 예정이며, `app/services/search.py`의 인터페이스만 교체하면 됩니다.)
 
@@ -33,7 +36,7 @@ backend/
     api/            # FastAPI 라우터 (videos, search)
     models/         # SQLAlchemy 모델 (Video, AnalysisSegment)
     schemas/        # Pydantic 요청/응답 스키마
-    services/       # yt-dlp 다운로드, Gemini 분석, 검색 매칭 로직
+    services/       # yt-dlp 메타데이터 조회, Gemini 분석, 검색 매칭 로직
     workers/        # 백그라운드 작업 엔트리포인트 (BackgroundTasks -> 추후 Celery)
     config.py, database.py, main.py
   tests/            # pytest 유닛/통합 테스트 (외부 API는 mock)
@@ -90,7 +93,7 @@ cd frontend && npm test
 
 ### `POST /api/videos` — 유튜브 URL 등록
 
-같은 `video_id`가 이미 `completed` 상태로 등록되어 있으면 재다운로드/재분석 없이 기존 레코드를 반환합니다.
+같은 `video_id`가 이미 `completed` 상태로 등록되어 있으면 재분석 없이 기존 레코드를 반환합니다.
 
 ```json
 { "youtube_url": "https://www.youtube.com/watch?v=abc12345678" }
@@ -126,15 +129,14 @@ cd frontend && npm test
 
 ## 참고 예시
 
-### yt-dlp 기본 다운로드 커맨드
+### yt-dlp 기본 메타데이터 조회 커맨드
 
 ```bash
-yt-dlp -f "mp4/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best" \
-  -o "downloads/%(id)s.%(ext)s" \
-  "https://www.youtube.com/watch?v=abc12345678"
+yt-dlp --skip-download --dump-json "https://www.youtube.com/watch?v=abc12345678"
 ```
 
-(`app/services/youtube.py`의 `download_video()`가 동일한 옵션을 파이썬 API로 호출합니다.)
+(`app/services/youtube.py`의 `fetch_video_metadata()`가 동일한 동작을 파이썬 API로 호출하며,
+비디오 바이트는 받지 않고 제목/썸네일/길이만 읽습니다.)
 
 ### 멀티모달 LLM 분석 프롬프트 (영상 등록 시, `app/services/llm_analysis.py`)
 
@@ -177,7 +179,7 @@ player.seekTo(125, true);
 
 ## 제약사항
 
-- 비공개/연령제한/삭제된 영상은 다운로드 단계에서 명확한 에러 메시지로 실패 처리됩니다
+- 비공개/연령제한/삭제된 영상은 메타데이터 조회 단계에서 명확한 에러 메시지로 실패 처리됩니다
   (`app/services/youtube.py`의 `PrivateVideoError`, `AgeRestrictedVideoError`, `VideoUnavailableError`).
 - 기본적으로 1시간(3600초)을 초과하는 영상은 등록이 거부됩니다 (`MAX_VIDEO_DURATION_SEC` 환경변수로 조정).
   프론트엔드 등록 화면에도 긴 영상에 대한 경고 문구가 표시됩니다.

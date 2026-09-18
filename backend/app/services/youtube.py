@@ -1,16 +1,15 @@
-"""YouTube video lookup/download via yt-dlp.
+"""YouTube video lookup via yt-dlp.
 
-NOTICE: Downloading YouTube videos with yt-dlp can conflict with YouTube's
-Terms of Service. This project downloads videos solely for personal,
-non-commercial technique analysis (see README). Do not redistribute
-downloaded files, and get legal review before turning this into a public
-service.
+The video itself is never downloaded: Gemini can analyze a public YouTube
+video directly from its URL (see services/llm_analysis.py), so this module
+only resolves lightweight metadata (title, thumbnail, duration) up front, to
+populate the library UI and enforce the duration limit before an expensive
+LLM call.
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
 
 import yt_dlp
 
@@ -20,7 +19,7 @@ _YOUTUBE_ID_RE = re.compile(
 
 
 class VideoDownloadError(Exception):
-    """Base class for user-facing download failures."""
+    """Base class for user-facing video lookup failures."""
 
 
 class InvalidUrlError(VideoDownloadError):
@@ -50,19 +49,18 @@ class DurationExceededError(VideoDownloadError):
 
 
 @dataclass
-class DownloadResult:
+class VideoMetadata:
     video_id: str
     title: str
     thumbnail_url: str | None
     duration_sec: int
-    local_path: str
 
 
 def extract_video_id(url: str) -> str:
     """Parse a YouTube video id out of a URL without hitting the network.
 
-    Used at registration time to dedupe against already-downloaded videos
-    before paying the cost of a real yt-dlp download.
+    Used at registration time to dedupe against already-registered videos
+    before paying the cost of a metadata lookup.
     """
     match = _YOUTUBE_ID_RE.search(url)
     if match:
@@ -70,27 +68,23 @@ def extract_video_id(url: str) -> str:
     raise InvalidUrlError(f"Could not parse a YouTube video id from url: {url}")
 
 
-def _map_download_error(url: str, exc: Exception) -> VideoDownloadError:
+def _map_lookup_error(url: str, exc: Exception) -> VideoDownloadError:
     message = str(exc).lower()
     if "private video" in message:
-        return PrivateVideoError(f"This video is private and cannot be downloaded: {url}")
+        return PrivateVideoError(f"This video is private and cannot be analyzed: {url}")
     if "age" in message and "restrict" in message:
-        return AgeRestrictedVideoError(f"This video is age-restricted and cannot be downloaded: {url}")
+        return AgeRestrictedVideoError(f"This video is age-restricted and cannot be analyzed: {url}")
     if any(term in message for term in ("video unavailable", "has been removed", "does not exist")):
         return VideoUnavailableError(f"This video is unavailable or has been deleted: {url}")
-    return VideoUnavailableError(f"Failed to download video ({exc})")
+    return VideoUnavailableError(f"Failed to look up video ({exc})")
 
 
-def download_video(url: str, download_dir: Path, max_duration_sec: int) -> DownloadResult:
-    """Download `url` with yt-dlp, raising a specific VideoDownloadError on failure.
+def fetch_video_metadata(url: str, max_duration_sec: int) -> VideoMetadata:
+    """Resolve `url`'s title/thumbnail/duration, raising a VideoDownloadError on failure.
 
-    Duration is checked from metadata before the actual download starts so we
-    don't pay bandwidth for videos we're going to reject anyway.
+    This is a metadata-only yt-dlp call (no video bytes are fetched).
     """
-    download_dir.mkdir(parents=True, exist_ok=True)
     ydl_opts = {
-        "format": "mp4/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
-        "outtmpl": str(download_dir / "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
@@ -108,18 +102,14 @@ def download_video(url: str, download_dir: Path, max_duration_sec: int) -> Downl
             duration_sec = int(info.get("duration") or 0)
             if duration_sec and duration_sec > max_duration_sec:
                 raise DurationExceededError(duration_sec, max_duration_sec)
-
-            info = ydl.extract_info(url, download=True)
-            local_path = ydl.prepare_filename(info)
     except DurationExceededError:
         raise
     except yt_dlp.utils.DownloadError as exc:
-        raise _map_download_error(url, exc) from exc
+        raise _map_lookup_error(url, exc) from exc
 
-    return DownloadResult(
+    return VideoMetadata(
         video_id=info["id"],
         title=info.get("title") or info["id"],
         thumbnail_url=info.get("thumbnail"),
-        duration_sec=duration_sec or int(info.get("duration") or 0),
-        local_path=local_path,
+        duration_sec=duration_sec,
     )
