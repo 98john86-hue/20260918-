@@ -10,6 +10,7 @@ node_modules/
 .next/
 out/
 coverage/
+*.tsbuildinfo
 
 # Env files (never commit secrets)
 .env
