@@ -94,6 +94,12 @@ def download_video(url: str, download_dir: Path, max_duration_sec: int) -> Downl
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        # The "web" client increasingly demands a sign-in/PO token from
+        # datacenter IPs (which is what a Render-hosted server looks like to
+        # YouTube). "android"/"ios" clients don't require that handshake, so
+        # try those first and only fall back to "web" for videos they can't
+        # resolve.
+        "extractor_args": {"youtube": {"player_client": ["android", "ios", "web"]}},
     }
 
     try:
