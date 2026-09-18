@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+coverage/
+
+# Env files (never commit secrets)
+.env
+.env.local
+backend/.env
+frontend/.env.local
+
+# Downloaded video files (personal-use analysis artifacts, not for repo/redistribution)
+backend/downloads/
+downloads/
+
+# OS / editor
+.DS_Store
+*.log
