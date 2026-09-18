@@ -15,7 +15,7 @@ class FakeAnalyzer:
         self.calls += 1
         return matches
 
-    def analyze_video(self, local_path: str):  # pragma: no cover - unused here
+    def analyze_video(self, youtube_url: str):  # pragma: no cover - unused here
         raise NotImplementedError
 
 

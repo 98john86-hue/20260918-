@@ -31,23 +31,22 @@ def process_video(db: Session, video_pk: int) -> None:
     db.commit()
 
     try:
-        result = youtube.download_video(video.youtube_url, settings.download_dir, settings.max_video_duration_sec)
+        metadata = youtube.fetch_video_metadata(video.youtube_url, settings.max_video_duration_sec)
     except youtube.VideoDownloadError as exc:
         video.status = VideoStatus.FAILED
         video.error_message = str(exc)
         db.commit()
         return
 
-    video.title = result.title
-    video.thumbnail_url = result.thumbnail_url
-    video.duration_sec = result.duration_sec
-    video.local_path = result.local_path
+    video.title = metadata.title
+    video.thumbnail_url = metadata.thumbnail_url
+    video.duration_sec = metadata.duration_sec
     video.status = VideoStatus.ANALYZING
     db.commit()
 
     try:
         analyzer = get_llm_analyzer()
-        segments = analyzer.analyze_video(result.local_path)
+        segments = analyzer.analyze_video(video.youtube_url)
     except LLMConfigurationError as exc:
         video.status = VideoStatus.FAILED
         video.error_message = str(exc)

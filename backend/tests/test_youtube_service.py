@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,45 +22,49 @@ def test_extract_video_id_invalid_url():
 
 
 @patch("app.services.youtube.yt_dlp.YoutubeDL")
-def test_download_video_success(mock_ydl_cls, tmp_path: Path):
+def test_fetch_video_metadata_success(mock_ydl_cls):
     mock_ydl = MagicMock()
     mock_ydl_cls.return_value.__enter__.return_value = mock_ydl
-    info = {"id": "abc12345678", "title": "Test Swim", "thumbnail": "http://x/thumb.jpg", "duration": 60}
-    mock_ydl.extract_info.side_effect = [info, info]
-    mock_ydl.prepare_filename.return_value = str(tmp_path / "abc12345678.mp4")
+    mock_ydl.extract_info.return_value = {
+        "id": "abc12345678",
+        "title": "Test Swim",
+        "thumbnail": "http://x/thumb.jpg",
+        "duration": 60,
+    }
 
-    result = youtube.download_video("https://youtu.be/abc12345678", tmp_path, max_duration_sec=3600)
+    result = youtube.fetch_video_metadata("https://youtu.be/abc12345678", max_duration_sec=3600)
 
     assert result.video_id == "abc12345678"
     assert result.title == "Test Swim"
     assert result.duration_sec == 60
+    mock_ydl.extract_info.assert_called_once_with("https://youtu.be/abc12345678", download=False)
 
 
 @patch("app.services.youtube.yt_dlp.YoutubeDL")
-def test_download_video_duration_exceeded(mock_ydl_cls, tmp_path: Path):
+def test_fetch_video_metadata_duration_exceeded(mock_ydl_cls):
     mock_ydl = MagicMock()
     mock_ydl_cls.return_value.__enter__.return_value = mock_ydl
     mock_ydl.extract_info.return_value = {"id": "abc", "duration": 7200}
 
     with pytest.raises(youtube.DurationExceededError):
-        youtube.download_video("https://youtu.be/abc12345678", tmp_path, max_duration_sec=3600)
+        youtube.fetch_video_metadata("https://youtu.be/abc12345678", max_duration_sec=3600)
 
 
 @patch("app.services.youtube.yt_dlp.YoutubeDL")
-def test_download_video_private(mock_ydl_cls, tmp_path: Path):
+def test_fetch_video_metadata_private(mock_ydl_cls):
     mock_ydl = MagicMock()
     mock_ydl_cls.return_value.__enter__.return_value = mock_ydl
     mock_ydl.extract_info.side_effect = yt_dlp.utils.DownloadError("ERROR: Private video")
 
     with pytest.raises(youtube.PrivateVideoError):
-        youtube.download_video("https://youtu.be/abc12345678", tmp_path, max_duration_sec=3600)
+        youtube.fetch_video_metadata("https://youtu.be/abc12345678", max_duration_sec=3600)
 
 
 @patch("app.services.youtube.yt_dlp.YoutubeDL")
-def test_download_video_unavailable(mock_ydl_cls, tmp_path: Path):
+def test_fetch_video_metadata_unavailable(mock_ydl_cls):
     mock_ydl = MagicMock()
     mock_ydl_cls.return_value.__enter__.return_value = mock_ydl
     mock_ydl.extract_info.side_effect = yt_dlp.utils.DownloadError("Video unavailable")
 
     with pytest.raises(youtube.VideoUnavailableError):
-        youtube.download_video("https://youtu.be/abc12345678", tmp_path, max_duration_sec=3600)
+        youtube.fetch_video_metadata("https://youtu.be/abc12345678", max_duration_sec=3600)

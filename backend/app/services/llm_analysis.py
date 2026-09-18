@@ -152,18 +152,17 @@ def parse_match_results(raw_text: str) -> list[MatchResult]:
 
 
 class LLMAnalyzer(Protocol):
-    def analyze_video(self, local_path: str) -> list[SceneSegment]: ...
+    def analyze_video(self, youtube_url: str) -> list[SceneSegment]: ...
 
     def rank_segments(self, query: str, segments: list[SceneSegment]) -> list[MatchResult]: ...
 
 
 class GeminiAnalyzer:
     def __init__(self, api_key: str, model_name: str, max_retries: int, min_wait: float, max_wait: float) -> None:
-        import google.generativeai as genai
+        from google import genai
 
-        genai.configure(api_key=api_key)
-        self._genai = genai
-        self._model = genai.GenerativeModel(model_name)
+        self._client = genai.Client(api_key=api_key)
+        self._model_name = model_name
         self._retry_decorator = retry(
             stop=stop_after_attempt(max_retries),
             wait=wait_exponential(multiplier=1, min=min_wait, max=max_wait),
@@ -171,11 +170,11 @@ class GeminiAnalyzer:
             reraise=True,
         )
 
-    def _generate(self, parts: list) -> str:
+    def _generate(self, contents: list) -> str:
         @self._retry_decorator
         def _call() -> str:
             try:
-                response = self._model.generate_content(parts)
+                response = self._client.models.generate_content(model=self._model_name, contents=contents)
             except Exception as exc:  # noqa: BLE001 - map every SDK error to our taxonomy
                 logger.warning("Gemini call failed, will retry if attempts remain: %s", exc)
                 raise TransientLLMError(str(exc)) from exc
@@ -185,12 +184,22 @@ class GeminiAnalyzer:
 
         return _call()
 
-    def analyze_video(self, local_path: str) -> list[SceneSegment]:
-        video_file = self._genai.upload_file(local_path)
-        try:
-            raw_text = self._generate([video_file, VIDEO_ANALYSIS_PROMPT])
-        finally:
-            self._genai.delete_file(video_file.name)
+    def analyze_video(self, youtube_url: str) -> list[SceneSegment]:
+        """Analyze a *public* YouTube video directly from its URL.
+
+        Gemini fetches the video itself from `file_uri` — the backend never
+        downloads it, which sidesteps YouTube's bot/sign-in wall for
+        datacenter IPs entirely (see services/youtube.py's module docstring).
+        """
+        from google.genai import types
+
+        # Part.from_uri() insists on guessing a mime type from the URL,
+        # which fails for a youtube.com/youtu.be link (no file extension).
+        # Gemini special-cases YouTube URLs server-side, so FileData is
+        # built directly here with no mime_type, matching Google's own
+        # documented usage for this feature.
+        video_part = types.Part(file_data=types.FileData(file_uri=youtube_url))
+        raw_text = self._generate([video_part, VIDEO_ANALYSIS_PROMPT])
         return parse_scene_segments(raw_text)
 
     def rank_segments(self, query: str, segments: list[SceneSegment]) -> list[MatchResult]:

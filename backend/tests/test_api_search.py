@@ -10,7 +10,7 @@ class FakeAnalyzer:
     def rank_segments(self, query, segments):
         return [MatchResult(segment_index=0, confidence=0.87, description="First stroke after push-off")]
 
-    def analyze_video(self, local_path):  # pragma: no cover - unused here
+    def analyze_video(self, youtube_url: str):  # pragma: no cover - unused here
         raise NotImplementedError
 
 
@@ -60,7 +60,7 @@ class NoMatchAnalyzer:
     def rank_segments(self, query, segments):
         return []
 
-    def analyze_video(self, local_path):  # pragma: no cover - unused here
+    def analyze_video(self, youtube_url: str):  # pragma: no cover - unused here
         raise NotImplementedError
 
 
