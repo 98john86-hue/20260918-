@@ -32,3 +32,12 @@ export async function searchLibrary(query: string, topK = 5): Promise<SearchResp
   });
   return handleResponse<SearchResponse>(res);
 }
+
+export async function searchInVideo(youtubeUrl: string, query: string, topK = 5): Promise<SearchResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/search/video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ youtube_url: youtubeUrl, query, top_k: topK }),
+  });
+  return handleResponse<SearchResponse>(res);
+}
