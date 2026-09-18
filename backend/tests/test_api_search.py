@@ -139,3 +139,33 @@ def test_search_video_returns_400_for_invalid_url(client, db_session):
     )
 
     assert response.status_code == 400
+
+
+def test_search_video_forwards_caller_supplied_gemini_api_key(client, db_session):
+    _seed_completed_video_v2(db_session)
+
+    with patch("app.api.search.get_llm_analyzer", return_value=FakeAnalyzer()) as mock_get_analyzer:
+        response = client.post(
+            "/api/search/video",
+            json={
+                "youtube_url": "https://youtu.be/abc12345678",
+                "query": "첫 스트로크",
+                "gemini_api_key": "user-supplied-key",
+            },
+        )
+
+    assert response.status_code == 200
+    mock_get_analyzer.assert_called_once_with("user-supplied-key")
+
+
+def test_search_forwards_caller_supplied_gemini_api_key(client, db_session):
+    _seed_completed_video(db_session)
+
+    with patch("app.api.search.get_llm_analyzer", return_value=FakeAnalyzer()) as mock_get_analyzer:
+        response = client.post(
+            "/api/search",
+            json={"query": "turn", "gemini_api_key": "user-supplied-key"},
+        )
+
+    assert response.status_code == 200
+    mock_get_analyzer.assert_called_once_with("user-supplied-key")

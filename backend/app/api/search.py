@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 @router.post("", response_model=SearchResponse)
 def search(payload: SearchRequest, db: Session = Depends(get_db)) -> SearchResponse:
     try:
-        analyzer = get_llm_analyzer()
+        analyzer = get_llm_analyzer(payload.gemini_api_key)
     except LLMConfigurationError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -38,7 +38,7 @@ def search_video(payload: VideoSearchRequest, db: Session = Depends(get_db)) -> 
         raise HTTPException(status_code=409, detail=f"영상이 아직 처리 중입니다 (상태: {video.status.value}).")
 
     try:
-        analyzer = get_llm_analyzer()
+        analyzer = get_llm_analyzer(payload.gemini_api_key)
     except LLMConfigurationError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

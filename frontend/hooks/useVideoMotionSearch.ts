@@ -11,12 +11,12 @@ export function useVideoMotionSearch() {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const search = useCallback(async (youtubeUrl: string, query: string) => {
-    if (!youtubeUrl.trim() || !query.trim()) return;
+  const search = useCallback(async (youtubeUrl: string, query: string, geminiApiKey: string) => {
+    if (!youtubeUrl.trim() || !query.trim() || !geminiApiKey.trim()) return;
     setIsSearching(true);
     setError(null);
     try {
-      const response = await searchInVideo(youtubeUrl.trim(), query.trim());
+      const response = await searchInVideo(youtubeUrl.trim(), query.trim(), geminiApiKey.trim());
       setResults(response.results);
       setHasSearched(true);
     } catch (err) {
